@@ -7,7 +7,8 @@ import {
   validatePayload,
   timingSafeEqualStrings,
   checkRateLimit,
-  getRequestBodySize,
+  getDeclaredBodySize,
+  getParsedBodySize,
   getVisitorKey,
   retrieveDemoAnswer,
   loadPolicySections,
@@ -103,6 +104,11 @@ describe('validatePayload', () => {
     )
   })
 
+  test('trims surrounding whitespace from the submitted access code', () => {
+    assert.equal(validatePayload({ question: 'hi', accessCode: '  secret-code \n' }).accessCode, 'secret-code')
+    assert.equal(validatePayload({ question: 'hi', accessCode: '   ' }).accessCode, '')
+  })
+
   test('trims the question and defaults history/accessCode', () => {
     const result = validatePayload({ question: '  what are your hours?  ' })
     assert.equal(result.valid, true)
@@ -131,16 +137,76 @@ describe('timingSafeEqualStrings', () => {
   })
 })
 
-describe('getRequestBodySize', () => {
-  test('uses the content-length header when present', () => {
-    const req = { headers: { 'content-length': '123' } }
-    assert.equal(getRequestBodySize(req, {}), 123)
+describe('body size helpers', () => {
+  test('getDeclaredBodySize reads the content-length header', () => {
+    assert.equal(getDeclaredBodySize({ headers: { 'content-length': '123' } }), 123)
   })
 
-  test('falls back to measuring the parsed body', () => {
-    const req = { headers: {} }
+  test('getDeclaredBodySize returns null when the header is missing or unusable', () => {
+    assert.equal(getDeclaredBodySize({ headers: {} }), null)
+    assert.equal(getDeclaredBodySize({ headers: { 'content-length': 'not-a-number' } }), null)
+    assert.equal(getDeclaredBodySize({ headers: { 'content-length': '-5' } }), null)
+  })
+
+  test('getParsedBodySize measures the parsed body', () => {
     const body = { question: 'hi' }
-    assert.equal(getRequestBodySize(req, body), Buffer.byteLength(JSON.stringify(body)))
+    assert.equal(getParsedBodySize(body), Buffer.byteLength(JSON.stringify(body)))
+  })
+})
+
+describe('oversized requests are rejected before the body is parsed', () => {
+  test('an oversized content-length returns 413 without touching req.body', async () => {
+    let touched = false
+    const req = {
+      method: 'POST',
+      headers: {
+        'content-length': String(LIMITS.MAX_BODY_BYTES + 1),
+        'x-vercel-forwarded-for': 'declared-size-test',
+      },
+      get body() {
+        touched = true
+        throw new Error('req.body must not be parsed for an oversized request')
+      },
+      socket: {},
+    }
+    const res = createMockRes()
+    await handler(req, res)
+    assert.equal(res.statusCode, 413)
+    assert.equal(touched, false, 'req.body was parsed despite an oversized content-length')
+  })
+
+  test('without a content-length header, an oversized parsed body still returns 413', async () => {
+    const body = { question: 'a'.repeat(LIMITS.MAX_BODY_BYTES) }
+    const req = {
+      method: 'POST',
+      headers: { 'x-vercel-forwarded-for': 'parsed-size-test' },
+      body,
+      socket: {},
+    }
+    const res = createMockRes()
+    await handler(req, res)
+    assert.equal(res.statusCode, 413)
+  })
+
+  test('a falsified small content-length does not skip the cap', async () => {
+    const req = {
+      method: 'POST',
+      headers: {
+        'content-length': '10',
+        'x-vercel-forwarded-for': 'falsified-size-test',
+      },
+      body: { question: 'a'.repeat(LIMITS.MAX_BODY_BYTES) },
+      socket: {},
+    }
+    const res = createMockRes()
+    await handler(req, res)
+    assert.equal(res.statusCode, 413)
+  })
+
+  test('a request within the cap is processed normally', async () => {
+    const res = createMockRes()
+    await handler(createMockReq('within-cap-test'), res)
+    assert.equal(res.statusCode, 200)
   })
 })
 

@@ -70,12 +70,19 @@ export function timingSafeEqualStrings(a, b) {
   return nodeTimingSafeEqual(hashA, hashB)
 }
 
-export function getRequestBodySize(req, body) {
+// Read from the header alone, so an oversized request can be rejected before
+// req.body is touched and the whole payload is parsed into memory. Returns
+// null when the header is missing or unusable, and the caller then measures
+// the parsed body instead.
+export function getDeclaredBodySize(req) {
   const contentLength = req.headers?.['content-length']
-  if (contentLength !== undefined) {
-    const parsed = Number(contentLength)
-    if (Number.isFinite(parsed)) return parsed
-  }
+  if (contentLength === undefined) return null
+  const parsed = Number(contentLength)
+  if (!Number.isFinite(parsed) || parsed < 0) return null
+  return parsed
+}
+
+export function getParsedBodySize(body) {
   return Buffer.byteLength(JSON.stringify(body ?? {}))
 }
 
@@ -132,7 +139,8 @@ export function validatePayload(body) {
     normalizedHistory = history
   }
 
-  const accessCode = typeof body.accessCode === 'string' ? body.accessCode : ''
+  // Trimmed so stray whitespace from a copy-paste does not fail the match.
+  const accessCode = typeof body.accessCode === 'string' ? body.accessCode.trim() : ''
 
   return {
     valid: true,
@@ -370,6 +378,18 @@ export function createHandler({ getClient = createAnthropicClient } = {}) {
       return sendJson(res, 405, { error: 'Only POST requests are supported.' })
     }
 
+    const tooLarge = () =>
+      sendJson(res, 413, {
+        error: 'That request is too large — please send a shorter message.',
+      })
+
+    // Header check first: this runs before req.body is touched, so an
+    // oversized payload is rejected without being parsed.
+    const declaredSize = getDeclaredBodySize(req)
+    if (declaredSize !== null && declaredSize > LIMITS.MAX_BODY_BYTES) {
+      return tooLarge()
+    }
+
     const { ok: bodyOk, body } = readBody(req)
     if (!bodyOk) {
       return sendJson(res, 400, {
@@ -377,11 +397,11 @@ export function createHandler({ getClient = createAnthropicClient } = {}) {
       })
     }
 
-    const bodySize = getRequestBodySize(req, body)
-    if (bodySize > LIMITS.MAX_BODY_BYTES) {
-      return sendJson(res, 413, {
-        error: 'That request is too large — please send a shorter message.',
-      })
+    // Always measure what was actually parsed, even when content-length looked
+    // small: a falsified header must not slip past the cap. The check above
+    // still avoids parsing a payload that declares itself oversized.
+    if (getParsedBodySize(body) > LIMITS.MAX_BODY_BYTES) {
+      return tooLarge()
     }
 
     const visitorKey = getVisitorKey(req)
@@ -398,10 +418,13 @@ export function createHandler({ getClient = createAnthropicClient } = {}) {
     }
 
     const hasApiKey = Boolean(process.env.ANTHROPIC_API_KEY)
+    // Trimmed too: a trailing newline in the dashboard value would otherwise
+    // disable live mode silently.
+    const configuredCode = process.env.ACCESS_CODE?.trim() ?? ''
     const hasValidAccessCode =
-      Boolean(process.env.ACCESS_CODE) &&
+      Boolean(configuredCode) &&
       Boolean(validation.accessCode) &&
-      timingSafeEqualStrings(validation.accessCode, process.env.ACCESS_CODE)
+      timingSafeEqualStrings(validation.accessCode, configuredCode)
 
     let mode = hasApiKey && hasValidAccessCode ? 'live' : 'demo'
     let result = null

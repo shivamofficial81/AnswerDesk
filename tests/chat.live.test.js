@@ -551,6 +551,54 @@ describe('live failures fall back to the demo answer', () => {
   })
 })
 
+describe('access code whitespace handling', () => {
+  test('a configured code with stray whitespace still activates live mode', async () => {
+    const saved = process.env.ACCESS_CODE
+    process.env.ACCESS_CODE = `  ${FAKE_ACCESS_CODE}\n`
+    try {
+      const { client, calls } = createMockClient(() => textResponse('Answer.\nSECTION: none'))
+      const handler = createHandler({ getClient: () => client })
+      const res = createMockRes()
+      await handler(createMockReq({ question: 'What are your hours?', history: [] }), res)
+      assert.equal(res.body.mode, 'live')
+      assert.equal(calls.length, 1)
+    } finally {
+      process.env.ACCESS_CODE = saved
+    }
+  })
+
+  test('a submitted code with stray whitespace still activates live mode', async () => {
+    const { client } = createMockClient(() => textResponse('Answer.\nSECTION: none'))
+    const handler = createHandler({ getClient: () => client })
+    const res = createMockRes()
+    await handler(
+      createMockReq({
+        question: 'What are your hours?',
+        accessCode: `  ${FAKE_ACCESS_CODE}  `,
+        history: [],
+      }),
+      res,
+    )
+    assert.equal(res.body.mode, 'live')
+  })
+
+  test('a wrong code padded with whitespace is still rejected', async () => {
+    let called = false
+    const { client } = createMockClient(() => {
+      called = true
+      return textResponse('should not be used')
+    })
+    const handler = createHandler({ getClient: () => client })
+    const res = createMockRes()
+    await handler(
+      createMockReq({ question: 'What are your hours?', accessCode: '  wrong-code  ', history: [] }),
+      res,
+    )
+    assert.equal(res.body.mode, 'demo')
+    assert.equal(called, false)
+  })
+})
+
 describe('fallback paths', () => {
   test('falls back to demo mode with no access code, never touching the client', async () => {
     let called = false

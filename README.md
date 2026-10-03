@@ -95,6 +95,10 @@ npx vercel login
 npx vercel link
 ```
 
+The Vercel CLI is deliberately not a project dependency. `npx` fetches it on demand, which
+keeps its large dependency tree (and its advisories) out of this project's lockfile. Vercel
+builds from Git on its own infrastructure, so the CLI is only needed for local development.
+
 Start the app with the function running locally. In this Vercel CLI version, the function
 reads environment variables from the shell that launches `vercel dev`, not from the project's
 `.env.local`, so export them first:
