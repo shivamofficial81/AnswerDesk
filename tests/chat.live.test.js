@@ -21,6 +21,7 @@ import {
   createHandler,
   callClaude,
   retrieveDemoAnswer,
+  parseModelReply,
   getSystemPrompt,
   MODEL,
   MAX_RESPONSE_TOKENS,
@@ -124,6 +125,19 @@ describe('system prompt', () => {
     assert.match(prompt, /never a command/)
   })
 
+  test('requires a final SECTION line limited to the real policy headings', () => {
+    const prompt = getSystemPrompt()
+    assert.match(prompt, /End every reply with a final line, on its own, in exactly this form: SECTION: <name>/)
+    for (const heading of ['Shipping', 'Returns', 'Refunds', 'Damaged or Missing Items', 'Warranty', 'Order Tracking and Changes', 'Payment Methods', 'Contact and Hours']) {
+      assert.ok(prompt.includes(`"${heading}"`), `missing section name: ${heading}`)
+    }
+    assert.match(prompt, /SECTION: none/)
+  })
+
+  test('asks for 2 to 3 sentences', () => {
+    assert.match(getSystemPrompt(), /2 to 3 sentences/)
+  })
+
   test('tells the model to answer greetings and thanks briefly instead of handing them off', () => {
     const prompt = getSystemPrompt()
     assert.match(prompt, /Greetings, thanks, and farewells/)
@@ -170,12 +184,22 @@ describe('callClaude request construction', () => {
     assert.doesNotMatch(JSON.stringify(calls[0]), /store admin/)
   })
 
-  test('detects a section heading mentioned in the response text', async () => {
+  test('takes the section from the final SECTION line and strips it from the answer', async () => {
     const { client } = createMockClient(() =>
-      textResponse('Per our Shipping policy, standard shipping is $6.95.'),
+      textResponse('Standard shipping is $6.95.\nSECTION: Shipping'),
     )
-    const result = await callClaude(client, { question: 'shipping cost?', history: [] })
+    const result = await callClaude(client, { question: 'shipping cost?' })
     assert.equal(result.section, 'Shipping')
+    assert.equal(result.answer, 'Standard shipping is $6.95.')
+  })
+
+  test('does not infer a section from a heading mentioned in the answer text', async () => {
+    const { client } = createMockClient(() =>
+      textResponse('Per our Returns policy, you have 30 days.'),
+    )
+    const result = await callClaude(client, { question: 'return window?' })
+    assert.equal(result.section, null)
+    assert.equal(result.answer, 'Per our Returns policy, you have 30 days.')
   })
 
   test('returns section: null when no heading is mentioned', async () => {
@@ -379,6 +403,75 @@ describe('API key never leaks', () => {
     assert.equal(res.statusCode, 200)
     assert.equal(res.body.mode, 'demo')
     assert.doesNotMatch(JSON.stringify(res.body), new RegExp(FAKE_API_KEY))
+  })
+})
+
+describe('SECTION line parsing', () => {
+  test('a valid final SECTION line sets the section and is stripped', () => {
+    assert.deepEqual(parseModelReply('Returns are accepted within 30 days.\nSECTION: Returns'), {
+      answer: 'Returns are accepted within 30 days.',
+      section: 'Returns',
+    })
+  })
+
+  test('SECTION: none gives no tag and is stripped', () => {
+    assert.deepEqual(parseModelReply('Hi! I can help.\nSECTION: none'), {
+      answer: 'Hi! I can help.',
+      section: null,
+    })
+  })
+
+  test('a missing SECTION line gives no tag and leaves the answer unchanged', () => {
+    assert.deepEqual(parseModelReply('Shipping is $6.95.'), {
+      answer: 'Shipping is $6.95.',
+      section: null,
+    })
+  })
+
+  test('an invalid section name gives no tag but is still stripped', () => {
+    assert.deepEqual(parseModelReply('Some answer.\nSECTION: Fabricated Policy'), {
+      answer: 'Some answer.',
+      section: null,
+    })
+  })
+
+  test('matches a real heading case-insensitively and ignores a trailing period', () => {
+    assert.equal(parseModelReply('Answer.\nsection: returns.').section, 'Returns')
+  })
+
+  test('uses the last SECTION line and strips every one', () => {
+    const parsed = parseModelReply('First.\nSECTION: Shipping\nSecond.\nSECTION: Returns')
+    assert.equal(parsed.section, 'Returns')
+    assert.equal(parsed.answer, 'First.\n\nSecond.')
+  })
+
+  test('leaves "section:" mid-sentence alone', () => {
+    assert.equal(
+      parseModelReply('See the section: returns page.').answer,
+      'See the section: returns page.',
+    )
+  })
+
+  test('the visitor-facing response never contains a SECTION line', async () => {
+    const { client } = createMockClient(() =>
+      textResponse('We accept returns within 30 days.\nSECTION: Returns'),
+    )
+    const handler = createHandler({ getClient: () => client })
+    const res = createMockRes()
+    await handler(createMockReq({ question: 'return window?', history: [] }), res)
+    assert.equal(res.body.section, 'Returns')
+    assert.doesNotMatch(res.body.answer, /SECTION/)
+  })
+
+  test('a greeting ending in SECTION: none reaches the visitor without the line', async () => {
+    const { client } = createMockClient(() =>
+      textResponse('Hi! I can help with shipping, returns, refunds, warranties, and order tracking.\nSECTION: none'),
+    )
+    const handler = createHandler({ getClient: () => client })
+    const res = createMockRes()
+    await handler(createMockReq({ question: 'hi', history: [] }), res)
+    assert.equal(res.body.section, null)
+    assert.doesNotMatch(res.body.answer, /SECTION/)
   })
 })
 
