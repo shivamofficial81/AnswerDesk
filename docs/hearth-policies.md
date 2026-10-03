@@ -44,7 +44,7 @@ packaging, and in resellable condition, with all tags and inserts
 included. Items showing signs of use, assembly, or damage from customer
 handling will be refused or subject to a 20% restocking fee.
 
-**How to return:** Start a return request at hearthandco.com/returns
+**How to return:** Start a return request at hearthandco.example/returns
 using your order number and the email address used at checkout. We'll
 email a prepaid return shipping label; a $6.95 label fee is deducted
 from your refund unless the return is due to our error (wrong item
@@ -72,7 +72,7 @@ inspection.
 ## Damaged or Missing Items
 
 If your order arrives damaged, defective, or with items missing,
-contact us within **7 days of delivery** at support@hearthandco.com
+contact us within **7 days of delivery** at support@hearthandco.example
 with your order number and photos of the item and its packaging. We
 will send a free replacement at no cost, or issue a full refund
 including original shipping, whichever you prefer. Claims submitted
@@ -96,20 +96,20 @@ policies above.
 The warranty does not cover normal wear and tear, damage from improper
 assembly, damage from use outside normal household conditions, or
 cosmetic changes like fading from sunlight exposure. To file a warranty
-claim, email support@hearthandco.com with your order number, a
+claim, email support@hearthandco.example with your order number, a
 description of the defect, and photos. Approved warranty claims are
 resolved with a free repair, replacement part, full replacement item,
 or refund, at Hearth & Co.'s discretion.
 
 ## Order Tracking and Changes
 
-Track your order any time at hearthandco.com/track using your order
+Track your order any time at hearthandco.example/track using your order
 number and email, or via the tracking link sent by email once your
 order ships.
 
 Order changes (shipping address, item swaps, cancellations) can be
 made within **1 hour of placing your order** by contacting
-support@hearthandco.com — after that window, orders enter fulfillment
+support@hearthandco.example — after that window, orders enter fulfillment
 and cannot be modified or canceled. If a change request comes in after
 the 1-hour window, we recommend waiting for delivery and starting a
 standard return instead.
@@ -124,9 +124,9 @@ denominations of $25, $50, $100, and $250, and never expire.
 
 ## Contact and Hours
 
-Customer support is available by email at support@hearthandco.com
+Customer support is available by email at support@hearthandco.example
 (response within 1 business day) and by phone at 1-888-555-0142,
 Monday–Friday, 8:00 AM–6:00 PM Pacific Time, excluding federal
-holidays. Live chat is available on hearthandco.com during the same
+holidays. Live chat is available on hearthandco.example during the same
 hours. Our support team does not monitor social media accounts for
 customer service requests.

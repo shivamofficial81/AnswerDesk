@@ -40,7 +40,7 @@ function ChatMessage({ message }) {
         <p>{message.text}</p>
         {message.handoff && (
           <p className="handoff-action">
-            <a href="mailto:support@hearthandco.com">Email support@hearthandco.com</a>
+            <a href="mailto:support@hearthandco.example">Email support@hearthandco.example</a>
           </p>
         )}
         {message.section && <span className="citation">Source: {message.section}</span>}

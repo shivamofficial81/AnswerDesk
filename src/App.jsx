@@ -9,7 +9,7 @@ import './styles/chat.css'
 function App() {
   return (
     <>
-      <p className="fiction-notice">Hearth &amp; Co. is a fictional store created to demonstrate AnswerDesk.</p>
+      <p className="fiction-notice">Hearth &amp; Co. is a fictional demo store.</p>
       <SiteHeader />
       <main>
         <Hero />

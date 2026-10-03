@@ -122,6 +122,15 @@ describe('demo mode retrieval', () => {
     assert.equal(json.section, 'Returns')
   })
 
+  test('answers a greeting with a friendly help list, not a handoff', async () => {
+    const { status, json } = await post({ question: 'hello' }, { visitor: 'greeting-test' })
+    assert.equal(status, 200)
+    assert.equal(json.mode, 'demo')
+    assert.equal(json.section, null)
+    assert.match(json.answer, /shipping, returns, refunds, warranties, and order tracking/)
+    assert.doesNotMatch(json.answer, /I don't have that information/)
+  })
+
   test('hands off on a documented gap (gift wrapping)', async () => {
     const { status, json } = await post(
       { question: 'Do you offer gift wrapping?' },

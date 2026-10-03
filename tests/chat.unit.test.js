@@ -1,5 +1,8 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync, readdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import {
   validatePayload,
   timingSafeEqualStrings,
@@ -271,6 +274,66 @@ describe('demo retrieval', () => {
   test('returns the handoff message for a nonsense question', () => {
     const result = retrieveDemoAnswer('asdkjhasdkjh qwoiuqwoiu')
     assert.equal(result.section, null)
+  })
+})
+
+describe('greetings and small talk (demo)', () => {
+  test('a greeting gets a friendly reply that lists what the bot can help with', () => {
+    for (const question of ['hi', 'Hello!', 'hey', 'Good morning']) {
+      const result = retrieveDemoAnswer(question)
+      assert.equal(result.section, null, question)
+      assert.match(
+        result.answer,
+        /^Hi! I can help with shipping, returns, refunds, warranties, and order tracking\./,
+        question,
+      )
+    }
+  })
+
+  test('thanks and farewells get short replies', () => {
+    assert.match(retrieveDemoAnswer('thanks').answer, /^You're welcome!/)
+    assert.match(retrieveDemoAnswer('Thank you so much.').answer, /^You're welcome!/)
+    assert.match(retrieveDemoAnswer('bye').answer, /^Goodbye!/)
+  })
+
+  test('small talk never produces the handoff sentence', () => {
+    for (const question of ['hi', 'hello', 'thanks', 'bye']) {
+      assert.doesNotMatch(retrieveDemoAnswer(question).answer, /I don't have that information/)
+    }
+  })
+
+  test('a greeting followed by a real question is still answered from the policies', () => {
+    const result = retrieveDemoAnswer('Hi, what is your return window?')
+    assert.equal(result.section, 'Returns')
+  })
+})
+
+describe('contact details use the reserved example domain', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const readDir = (dir) =>
+    readdirSync(dir)
+      .map((name) => readFileSync(path.join(dir, name), 'utf8'))
+      .join('\n')
+  const policyDoc = readFileSync(path.join(root, 'docs', 'hearth-policies.md'), 'utf8')
+  const uiSource = [
+    readDir(path.join(root, 'src', 'components')),
+    readDir(path.join(root, 'src', 'lib')),
+    readFileSync(path.join(root, 'src', 'App.jsx'), 'utf8'),
+  ].join('\n')
+
+  test('the policy doc uses only support@hearthandco.example', () => {
+    assert.doesNotMatch(policyDoc, /hearthandco\.com/)
+    assert.match(policyDoc, /support@hearthandco\.example/)
+  })
+
+  test('the UI source uses only support@hearthandco.example', () => {
+    assert.doesNotMatch(uiSource, /hearthandco\.com/)
+    assert.match(uiSource, /support@hearthandco\.example/)
+  })
+
+  test('the notice reads "Hearth & Co. is a fictional demo store."', () => {
+    const app = readFileSync(path.join(root, 'src', 'App.jsx'), 'utf8')
+    assert.match(app, /Hearth &amp; Co\. is a fictional demo store\./)
   })
 })
 

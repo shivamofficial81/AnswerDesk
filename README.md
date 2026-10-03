@@ -5,9 +5,11 @@ shoppers' policy questions (shipping, returns, refunds, warranty, tracking, paym
 store's policy document, names the section it used, and hands off to a human when the policy
 does not cover the question.
 
-Hearth & Co. is a fictional store created to demonstrate AnswerDesk. It is a portfolio project.
+Hearth & Co. is a fictional demo store. It is a portfolio project.
 
 ![AnswerDesk homepage on desktop](screenshots/desktop-home.png)
+
+![The chat widget answering a greeting in demo mode](screenshots/desktop-widget-greeting.png)
 
 ## How it works
 

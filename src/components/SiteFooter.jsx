@@ -9,7 +9,7 @@ export default function SiteFooter() {
         <div>
           <h2>Contact</h2>
           <p>
-            <a href="mailto:support@hearthandco.com">support@hearthandco.com</a>
+            <a href="mailto:support@hearthandco.example">support@hearthandco.example</a>
           </p>
           <p>
             <a href="tel:+18885550142">1-888-555-0142</a>

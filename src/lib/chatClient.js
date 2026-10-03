@@ -4,7 +4,7 @@ export const MESSAGES = {
   rateLimit: "You're sending messages a little too fast. Wait a moment, then try again.",
   tooLong: `Questions must be ${MAX_QUESTION_LENGTH} characters or fewer. Shorten your question and try again.`,
   unavailable:
-    'The assistant is unavailable right now. Try again in a moment, or email support@hearthandco.com.',
+    'The assistant is unavailable right now. Try again in a moment, or email support@hearthandco.example.',
 }
 
 const HANDOFF_PREFIX = "I don't have that information"
