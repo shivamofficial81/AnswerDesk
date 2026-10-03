@@ -1,10 +1,10 @@
 // Integration tests against a running `vercel dev` instance.
 //
-// These hit real HTTP, so each test group uses its own x-forwarded-for
-// value as a distinct "visitor" — otherwise the server's per-visitor rate
-// limiter (shared, in-memory, keyed by IP) would make earlier tests eat
-// into the budget the later ones expect, and the dedicated rate-limit
-// test would need to fire first every time.
+// These hit real HTTP, so each test group sends its own x-vercel-forwarded-for
+// value as a distinct "visitor". vercel dev does not set that header itself,
+// so the value is what the limiter keys on here. The rate limiter is covered
+// in-process in chat.unit.test.js, because vercel dev starts a fresh process
+// per request and in-memory state never carries over between HTTP calls.
 //
 // Run with a `vercel dev` server already up (see README / package.json):
 //   npm run test:integration
@@ -19,7 +19,7 @@ async function post(body, { visitor = 'default', headers = {}, rawBody } = {}) {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-forwarded-for': visitor,
+      'x-vercel-forwarded-for': visitor,
       ...headers,
     },
     body: rawBody !== undefined ? rawBody : JSON.stringify(body),
@@ -46,7 +46,7 @@ describe('request validation', () => {
   test('rejects non-POST methods', async () => {
     const res = await fetch(`${BASE_URL}/api/chat`, {
       method: 'GET',
-      headers: { 'x-forwarded-for': 'method-test' },
+      headers: { 'x-vercel-forwarded-for': 'method-test' },
     })
     assert.equal(res.status, 405)
   })
@@ -160,14 +160,21 @@ describe('mode decision', () => {
     assert.equal(json.mode, 'demo')
   })
 
-  test('switches to live mode with a valid access code and API key configured', async () => {
-    const { json } = await post(
+  test('attempts live mode with a valid access code, fails gracefully without a real key, never leaks it', async () => {
+    // This .env.local key is a placeholder, not a real Anthropic key — live
+    // mode is genuinely wired to the real SDK now, so this call really
+    // reaches (and is rejected by) the Anthropic API. That's deliberate:
+    // spending real API cost to verify a successful live answer end-to-end
+    // wasn't requested, so this only verifies the mode decision reached the
+    // live path and failed cleanly (no crash, no key leak) rather than
+    // silently falling back to demo. See tests/chat.live.test.js for the
+    // fully mocked, no-network verification of live mode's actual behavior.
+    const { status, json } = await post(
       { question: 'What are your hours?', accessCode: VALID_ACCESS_CODE },
       { visitor: 'valid-code-test' },
     )
-    assert.equal(json.mode, 'live')
-    // Stubbed for now: live mode still returns demo-shaped retrieval results.
-    assert.ok(json.answer.length > 0)
+    assert.equal(status, 500)
+    assert.doesNotMatch(JSON.stringify(json), /FAKE_TEST_KEY_not_real/)
   })
 })
 

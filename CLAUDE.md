@@ -23,9 +23,13 @@ with a security rule below, the security rule wins — stop and ask.
      AND ANTHROPIC_API_KEY is set. Compare the code with a timing-safe
      comparison. The code lives in the ACCESS_CODE env var.
 3. Server-side limits on every live request: max question length
-   (500 chars), max conversation history (last 6 turns), max_tokens
-   300, request body size cap. Reject anything over the limits with a
-   friendly message.
+   (500 chars), max_tokens 300, request body size cap. Reject anything
+   over the limits with a friendly message. Live mode is single-turn:
+   only the system prompt and the current question are sent to Claude.
+   A `history` field is still accepted in the request (and shape/length
+   validated, max 6 turns) for backward compatibility, but is never
+   forwarded to the model — client-supplied history is untrusted, and a
+   forged assistant turn in it would be a prompt-injection vector.
 4. Per-visitor rate limiting: best-effort in-memory limit in the function.
    Be honest in docs/comments that serverless in-memory limits are not
    airtight across instances; the real cost ceiling is the prepaid
@@ -51,7 +55,7 @@ with a security rule below, the security rule wins — stop and ask.
 ## Bot behaviour
 - Answers only from docs/hearth-policies.md
 - Every answer names the policy section it came from
-- If the docs don't cover it: "I don't have that information — would you
+- If the docs don't cover it: "I don't have that information. Would you
   like me to connect you with our team?" Never guess, never invent
   prices, dates, or policies.
 - Friendly, concise, 2–4 sentences.

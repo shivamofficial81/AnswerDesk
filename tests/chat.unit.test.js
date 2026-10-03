@@ -9,6 +9,7 @@ import {
   retrieveDemoAnswer,
   loadPolicySections,
   LIMITS,
+  toPlainExcerpt,
   default as handler,
 } from '../api/chat.js'
 
@@ -33,7 +34,7 @@ function createMockReq(visitor) {
     method: 'POST',
     headers: {
       'content-length': String(Buffer.byteLength(JSON.stringify(payload))),
-      'x-forwarded-for': visitor,
+      'x-vercel-forwarded-for': visitor,
     },
     body: payload,
     socket: {},
@@ -141,9 +142,25 @@ describe('getRequestBodySize', () => {
 })
 
 describe('getVisitorKey', () => {
-  test('uses the first x-forwarded-for entry', () => {
-    const req = { headers: { 'x-forwarded-for': '203.0.113.5, 10.0.0.1' }, socket: {} }
+  test('uses the platform x-vercel-forwarded-for header', () => {
+    const req = { headers: { 'x-vercel-forwarded-for': '203.0.113.5' }, socket: {} }
     assert.equal(getVisitorKey(req), '203.0.113.5')
+  })
+
+  test('falls back to x-real-ip when x-vercel-forwarded-for is absent', () => {
+    const req = { headers: { 'x-real-ip': '203.0.113.9' }, socket: {} }
+    assert.equal(getVisitorKey(req), '203.0.113.9')
+  })
+
+  test('ignores a client-supplied x-forwarded-for entirely', () => {
+    const req = { headers: { 'x-forwarded-for': '198.51.100.1' }, socket: {} }
+    assert.equal(getVisitorKey(req), 'unknown')
+  })
+
+  test('x-forwarded-for does not change the key when the platform header is present', () => {
+    const a = { headers: { 'x-vercel-forwarded-for': '203.0.113.5', 'x-forwarded-for': '1.1.1.1' }, socket: {} }
+    const b = { headers: { 'x-vercel-forwarded-for': '203.0.113.5', 'x-forwarded-for': '2.2.2.2' }, socket: {} }
+    assert.equal(getVisitorKey(a), getVisitorKey(b))
   })
 
   test('falls back to the socket remote address', () => {
@@ -226,6 +243,31 @@ describe('demo retrieval', () => {
     assert.match(result.answer, /connect you with our team/)
   })
 
+  test('demo answers are a plain-text excerpt of at most two sentences', () => {
+    const result = retrieveDemoAnswer('What is your return window?')
+    assert.equal(result.section, 'Returns')
+    assert.doesNotMatch(result.answer, /\*\*/)
+    assert.doesNotMatch(result.answer, /\n/)
+    assert.doesNotMatch(result.answer, /^- /m)
+    assert.ok(result.answer.startsWith('We accept returns within 30 days'))
+    assert.ok(!result.answer.includes('To qualify'))
+  })
+
+  test('toPlainExcerpt keeps two sentences separated by a single space', () => {
+    assert.equal(
+      toPlainExcerpt('First point is here. Second point follows.\nThird point is cut.'),
+      'First point is here. Second point follows.',
+    )
+  })
+
+  test('the handoff message is the exact approved sentence', () => {
+    const result = retrieveDemoAnswer('Do you offer gift wrapping?')
+    assert.equal(
+      result.answer,
+      "I don't have that information. Would you like me to connect you with our team?",
+    )
+  })
+
   test('returns the handoff message for a nonsense question', () => {
     const result = retrieveDemoAnswer('asdkjhasdkjh qwoiuqwoiu')
     assert.equal(result.section, null)
@@ -243,6 +285,19 @@ describe('handler rate limiting (direct, in-process)', () => {
     for (let i = 0; i < LIMITS.RATE_LIMIT_MAX_REQUESTS + 5; i += 1) {
       const res = createMockRes()
       await handler(createMockReq(visitor), res)
+      statuses.push(res.statusCode)
+    }
+    assert.ok(statuses.includes(429), `expected a 429 among: ${statuses.join(', ')}`)
+  })
+
+  test('rotating a client-supplied x-forwarded-for does not reset the limit', async () => {
+    const visitor = 'handler-rotated-xff-test'
+    const statuses = []
+    for (let i = 0; i < LIMITS.RATE_LIMIT_MAX_REQUESTS + 5; i += 1) {
+      const req = createMockReq(visitor)
+      req.headers['x-forwarded-for'] = `198.51.100.${i}`
+      const res = createMockRes()
+      await handler(req, res)
       statuses.push(res.statusCode)
     }
     assert.ok(statuses.includes(429), `expected a 429 among: ${statuses.join(', ')}`)
