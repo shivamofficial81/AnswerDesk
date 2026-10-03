@@ -256,6 +256,19 @@ describe('demo retrieval', () => {
     assert.ok(!result.answer.includes('To qualify'))
   })
 
+  test('toPlainExcerpt does not split inside an address or a price', () => {
+    assert.equal(
+      toPlainExcerpt('Email support@hearthandco.example for help. Shipping is $6.95 today. Third one.'),
+      'Email support@hearthandco.example for help. Shipping is $6.95 today.',
+    )
+  })
+
+  test('the contact excerpt keeps its first sentence and the full address', () => {
+    const result = retrieveDemoAnswer('What are your hours?')
+    assert.equal(result.section, 'Contact and Hours')
+    assert.ok(result.answer.startsWith('Customer support is available by email at support@hearthandco.example'))
+  })
+
   test('toPlainExcerpt keeps two sentences separated by a single space', () => {
     assert.equal(
       toPlainExcerpt('First point is here. Second point follows.\nThird point is cut.'),

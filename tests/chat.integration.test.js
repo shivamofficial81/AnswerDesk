@@ -169,20 +169,17 @@ describe('mode decision', () => {
     assert.equal(json.mode, 'demo')
   })
 
-  test('attempts live mode with a valid access code, fails gracefully without a real key, never leaks it', async () => {
-    // This .env.local key is a placeholder, not a real Anthropic key — live
-    // mode is genuinely wired to the real SDK now, so this call really
-    // reaches (and is rejected by) the Anthropic API. That's deliberate:
-    // spending real API cost to verify a successful live answer end-to-end
-    // wasn't requested, so this only verifies the mode decision reached the
-    // live path and failed cleanly (no crash, no key leak) rather than
-    // silently falling back to demo. See tests/chat.live.test.js for the
-    // fully mocked, no-network verification of live mode's actual behavior.
+  test('a live call rejected by the real API falls back to demo, never leaks the key', async () => {
+    // The key here is a placeholder, so the real Anthropic API rejects the
+    // call. Spending real API cost to verify a successful live answer was not
+    // requested; tests/chat.live.test.js covers live success with a mock.
     const { status, json } = await post(
       { question: 'What are your hours?', accessCode: VALID_ACCESS_CODE },
       { visitor: 'valid-code-test' },
     )
-    assert.equal(status, 500)
+    assert.equal(status, 200)
+    assert.equal(json.mode, 'demo')
+    assert.equal(json.section, 'Contact and Hours')
     assert.doesNotMatch(JSON.stringify(json), /FAKE_TEST_KEY_not_real/)
   })
 })

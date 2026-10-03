@@ -20,6 +20,7 @@ import assert from 'node:assert/strict'
 import {
   createHandler,
   callClaude,
+  retrieveDemoAnswer,
   getSystemPrompt,
   MODEL,
   MAX_RESPONSE_TOKENS,
@@ -337,7 +338,8 @@ describe('API key never leaks', () => {
       handler(createMockReq({ question: 'What are your hours?', history: [] }), res),
     )
 
-    assert.equal(res.statusCode, 500)
+    assert.equal(res.statusCode, 200)
+    assert.equal(res.body.mode, 'demo')
     assert.doesNotMatch(JSON.stringify(res.body), new RegExp(FAKE_API_KEY))
     for (const line of logs) {
       assert.doesNotMatch(line, new RegExp(FAKE_API_KEY))
@@ -356,7 +358,8 @@ describe('API key never leaks', () => {
       handler(createMockReq({ question: 'What are your hours?', history: [] }), res),
     )
 
-    assert.equal(res.statusCode, 500)
+    assert.equal(res.statusCode, 200)
+    assert.equal(res.body.mode, 'demo')
     for (const line of logs) {
       assert.doesNotMatch(line, new RegExp(FAKE_API_KEY))
     }
@@ -373,8 +376,85 @@ describe('API key never leaks', () => {
       await handler(createMockReq({ question: 'shipping cost?', history: [] }), res)
     })
 
-    assert.equal(res.statusCode, 500)
+    assert.equal(res.statusCode, 200)
+    assert.equal(res.body.mode, 'demo')
     assert.doesNotMatch(JSON.stringify(res.body), new RegExp(FAKE_API_KEY))
+  })
+})
+
+describe('live failures fall back to the demo answer', () => {
+  const failures = [
+    ['a billing error', Object.assign(new Error('Your credit balance is too low to access the API.'), { name: 'BadRequestError', status: 400 })],
+    ['an exhausted-quota 429', Object.assign(new Error('Rate limit reached for requests'), { name: 'RateLimitError', status: 429 })],
+    ['a 402 payment error', Object.assign(new Error('Payment required'), { name: 'PaymentRequiredError', status: 402 })],
+    ['a network failure', Object.assign(new Error('fetch failed'), { name: 'TypeError' })],
+    ['a non-Error throw', { name: 'WeirdSdkError', message: 'boom' }],
+  ]
+
+  for (const [label, error] of failures) {
+    test(`${label} serves the demo answer with mode "demo", not the unavailable message`, async () => {
+      const question = 'What is your return window?'
+      const { client } = createMockClient(() => {
+        throw error
+      })
+      const handler = createHandler({ getClient: () => client })
+      const res = createMockRes()
+
+      await captureConsoleError(() =>
+        handler(createMockReq({ question, history: [] }), res),
+      )
+
+      const expected = retrieveDemoAnswer(question)
+      assert.equal(res.statusCode, 200)
+      assert.equal(res.body.mode, 'demo')
+      assert.equal(res.body.answer, expected.answer)
+      assert.equal(res.body.section, expected.section)
+      assert.doesNotMatch(JSON.stringify(res.body), /credit balance|Rate limit|Payment required|fetch failed|boom/)
+    })
+  }
+
+  test('a fallback for an uncovered question returns the handoff, still in demo mode', async () => {
+    const { client } = createMockClient(() => {
+      throw Object.assign(new Error('Your credit balance is too low'), { name: 'BadRequestError' })
+    })
+    const handler = createHandler({ getClient: () => client })
+    const res = createMockRes()
+    await captureConsoleError(() =>
+      handler(createMockReq({ question: 'Do you offer gift wrapping?', history: [] }), res),
+    )
+    assert.equal(res.body.mode, 'demo')
+    assert.equal(res.body.answer, HANDOFF_MESSAGE)
+  })
+
+  test('logs only the error name on a live failure, never the message', async () => {
+    const { client } = createMockClient(() => {
+      throw Object.assign(new Error('Your credit balance is too low for account acct_123'), {
+        name: 'BadRequestError',
+      })
+    })
+    const handler = createHandler({ getClient: () => client })
+    const res = createMockRes()
+    const logs = await captureConsoleError(() =>
+      handler(createMockReq({ question: 'What are your hours?', history: [] }), res),
+    )
+    assert.ok(logs.some((line) => line.includes('BadRequestError')))
+    for (const line of logs) {
+      assert.doesNotMatch(line, /credit balance|acct_123/)
+    }
+  })
+
+  test('a failing client construction also falls back to demo', async () => {
+    const handler = createHandler({
+      getClient: () => {
+        throw new Error('no client')
+      },
+    })
+    const res = createMockRes()
+    await captureConsoleError(() =>
+      handler(createMockReq({ question: 'What are your hours?', history: [] }), res),
+    )
+    assert.equal(res.statusCode, 200)
+    assert.equal(res.body.mode, 'demo')
   })
 })
 

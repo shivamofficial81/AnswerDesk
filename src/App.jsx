@@ -1,3 +1,4 @@
+import { Analytics } from '@vercel/analytics/react'
 import SiteHeader from './components/SiteHeader.jsx'
 import Hero from './components/Hero.jsx'
 import ProductGrid from './components/ProductGrid.jsx'
@@ -17,6 +18,7 @@ function App() {
       </main>
       <SiteFooter />
       <ChatWidget />
+      <Analytics />
     </>
   )
 }

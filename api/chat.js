@@ -267,10 +267,11 @@ export function toPlainExcerpt(body) {
     .filter(Boolean)
     .join(' ')
     .replace(/\*\*/g, '')
-  const sentences = flat.match(/[^.!?]+[.!?]+(?=\s|$)/g) ?? [flat]
-  return sentences
+  // A sentence ends at . ! or ? followed by a space and a capital or digit, so
+  // dots inside addresses (support@hearthandco.example) and prices ($6.95) stay put.
+  return flat
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9"'(])/)
     .slice(0, 2)
-    .map((sentence) => sentence.trim())
     .join(' ')
 }
 
@@ -385,14 +386,26 @@ export function createHandler({ getClient = createAnthropicClient } = {}) {
       Boolean(validation.accessCode) &&
       timingSafeEqualStrings(validation.accessCode, process.env.ACCESS_CODE)
 
-    const mode = hasApiKey && hasValidAccessCode ? 'live' : 'demo'
+    let mode = hasApiKey && hasValidAccessCode ? 'live' : 'demo'
+    let result = null
 
     // validation.history is accepted and shape-validated above for backward
     // compatibility, but intentionally never forwarded to callClaude.
-    const result =
-      mode === 'live'
-        ? await callClaude(getClient(), { question: validation.question })
-        : retrieveDemoAnswer(validation.question)
+    if (mode === 'live') {
+      try {
+        result = await callClaude(getClient(), { question: validation.question })
+      } catch (err) {
+        // Any live failure (billing, quota, network, SDK) degrades to the demo
+        // answer. Only the error name is logged: SDK messages can echo request
+        // details, and the response never carries error text.
+        console.error('live call failed, serving demo answer:', err?.name ?? 'UnknownError')
+        mode = 'demo'
+      }
+    }
+
+    if (mode === 'demo') {
+      result = retrieveDemoAnswer(validation.question)
+    }
 
     return sendJson(res, 200, {
       mode,

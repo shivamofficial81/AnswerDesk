@@ -33,6 +33,10 @@ The widget shows a **Demo** or **Live** badge from the mode the server reports.
 If a question is not covered by the policies, both modes answer with the same handoff
 sentence: "I don't have that information. Would you like me to connect you with our team?"
 
+If a live call fails for any reason (an exhausted balance, a billing error, a network fault), the
+server answers that question from demo mode and reports `demo`. The visitor sees the same answer
+they would get in demo mode, and the error details are never sent to the browser.
+
 Live mode is single-turn. The model receives only the system prompt and the current question.
 A `history` field is still accepted for compatibility but is never sent to the model, because
 client-supplied conversation turns could be forged to inject instructions.
